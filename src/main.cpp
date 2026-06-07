@@ -1,98 +1,95 @@
 #include <Arduino.h>
-#include "display.h"
-#include "gps.h"
-#include "buzzer.h"
+#include <SPI.h>
+#include <SdFat.h>
 
-#define BUZZER_PIN PA0
+#define SD_CS PA4
 
-float total_distance = 0;
-unsigned long start_time = 0;
-bool started = false;
+SdFat32 sd;
+File32 file;
 
-float last_lat = 0;
-float last_lon = 0;
+void printSdError(const char *msg) {
+    Serial.println(msg);
+    sd.errorPrint(&Serial);
 
-float last_mark = 0;
+    Serial.print("Error code = 0x");
+    Serial.println(sd.sdErrorCode(), HEX);
 
-// Haversine
-float calcDistance(float lat1, float lon1, float lat2, float lon2) {
-    float R = 6371000; // m
-    float dLat = radians(lat2 - lat1);
-    float dLon = radians(lon2 - lon1);
-
-    lat1 = radians(lat1);
-    lat2 = radians(lat2);
-
-    float a = sin(dLat/2)*sin(dLat/2) +
-              sin(dLon/2)*sin(dLon/2)*cos(lat1)*cos(lat2);
-
-    float c = 2 * atan2(sqrt(a), sqrt(1-a));
-    return R * c;
+    Serial.print("Error data = 0x");
+    Serial.println(sd.sdErrorData(), HEX);
 }
 
 void setup() {
     Serial.setTx(PA9);
     Serial.setRx(PA10);
-    Serial.begin(115200);   // debug PC
+    Serial.begin(115200);
 
-    display_init();
-    gps_init();
-    buzzer_init(BUZZER_PIN);
+    delay(5000);
 
-    delay(2000);
-    Serial.println("SYSTEM START");
+    Serial.println("===== SD WRITE/READ SAME FILE TEST =====");
+
+    pinMode(SD_CS, OUTPUT);
+    digitalWrite(SD_CS, HIGH);
+    delay(200);
+
+    SPI.begin();
+    delay(200);
+
+    // SPI chậm để ổn định khi test breadboard
+    SdSpiConfig config(SD_CS, DEDICATED_SPI, SD_SCK_HZ(125000));
+
+    if (!sd.begin(config)) {
+        Serial.println("SD begin FAILED");
+        sd.initErrorPrint(&Serial);
+        return;
+    }
+
+    Serial.println("SD begin OK");
+
+    // Xóa file cũ để test sạch
+    if (sd.exists("test.txt")) {
+        sd.remove("test.txt");
+        Serial.println("Old test.txt removed");
+    }
+
+    file = sd.open("test.txt", O_RDWR | O_CREAT);
+
+    if (!file) {
+        printSdError("Open test.txt FAILED");
+        return;
+    }
+
+    Serial.println("Writing...");
+    file.println("HELLO STM32 FAT32");
+    file.println("WRITE READ TEST");
+
+    if (!file.sync()) {
+        printSdError("file.sync() FAILED");
+        file.close();
+        return;
+    }
+
+    Serial.println("Write + sync OK");
+
+    // Quay về đầu file để đọc lại
+    if (!file.seekSet(0)) {
+        printSdError("seekSet(0) FAILED");
+        file.close();
+        return;
+    }
+
+    Serial.println("Reading test.txt:");
+
+    while (file.available()) {
+        Serial.write(file.read());
+    }
+
+    file.close();
+
+    Serial.println();
+    Serial.println("Read OK");
 }
 
 void loop() {
-
-    GPSData gpsData = gps_update();
-
-    unsigned long now = millis();
-
-    if (gpsData.valid) {
-
-        if (!started) {
-            started = true;
-            start_time = now;
-            last_lat = gpsData.lat;
-            last_lon = gpsData.lon;
-        }
-
-        float d = calcDistance(last_lat, last_lon, gpsData.lat, gpsData.lon);
-
-        if (d > 0.5) { // lọc nhiễu
-            total_distance += d;
-            last_lat = gpsData.lat;
-            last_lon = gpsData.lon;
-        }
-    }
-
-    int elapsed = started ? (now - start_time) / 1000 : 0;
-
-    // pace
-    float pace = 0;
-    if (gpsData.speed_kmph > 0.5) {
-        pace = 60.0 / gpsData.speed_kmph;
-    }
-
-    // buzzer mỗi 100m
-    float current_step = total_distance / 100.0;
-    if ((int)current_step > (int)last_mark) {
-        buzzer_start();
-        last_mark = current_step;
-    }
-
-    display_show(
-        total_distance,
-        elapsed,
-        pace,
-        gpsData.valid,
-        gpsData.hasSignal,
-        gpsData.lat,
-        gpsData.lon
-    );
-
-    buzzer_update();
-
-    delay(50);
+    Serial.println("Loop running...");
+    delay(2000);
 }
