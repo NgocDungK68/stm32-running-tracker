@@ -111,6 +111,10 @@ bool button_b2_pressed() {
     return consume_short_press(b2);
 }
 
+bool button_b1_long_pressed() {
+    return consume_long_press(b1);
+}
+
 bool button_b2_long_pressed() {
     return consume_long_press(b2);
 }

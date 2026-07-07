@@ -6,9 +6,9 @@
 
 static TinyGPSPlus gpsParser;
 
-// Bạn đang dùng USART2:
-// PA2 = TX2 của STM32
-// PA3 = RX2 của STM32
+// GPS dùng USART2:
+// PA2 = TX2 của STM32 -> GPS RX
+// PA3 = RX2 của STM32 <- GPS TX
 HardwareSerial SerialGPS(USART2);
 
 static GPSData currentData;
@@ -31,10 +31,6 @@ static GPSData make_empty_gps_data() {
 
 void gps_init() {
     SerialGPS.begin(GPS_BAUDRATE);
-
-#if GPS_DEBUG_NMEA
-    Serial.begin(115200);
-#endif
 
     currentData = make_empty_gps_data();
     lastSignalTime = 0;

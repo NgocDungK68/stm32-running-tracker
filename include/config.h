@@ -87,4 +87,11 @@
 // 0 = tắt log
 #define SD_HISTORY_DEBUG 1
 
+// =======================
+// History test mode
+// =======================
+// 1 = dùng dữ liệu mẫu, test được khi chưa cắm MicroSD
+// 0 = dùng MicroSD thật, nếu không có SD sẽ báo lỗi trên OLED
+#define SD_HISTORY_USE_SAMPLE_DATA 1
+
 #endif

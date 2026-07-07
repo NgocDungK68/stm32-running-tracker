@@ -2,336 +2,499 @@
 #include "config.h"
 
 #include <Arduino.h>
-#include <SPI.h>
-#include <SdFat.h>
+#include <SD.h>
+#include <string.h>
+#include <stdlib.h>
 
-static SdFat sd;
-static bool sdReady = false;
-
-static void debugPrintln(const char* message) {
-#if SD_HISTORY_DEBUG
-    Serial.println(message);
+#ifndef SD_HISTORY_USE_SAMPLE_DATA
+#define SD_HISTORY_USE_SAMPLE_DATA 1
 #endif
+
+struct StoredRunHistoryRecord {
+    char date[11];
+    char start_time[9];
+
+    float distance_m;
+
+    uint32_t moving_time_s;
+    uint32_t elapsed_time_s;
+
+    uint16_t pause_count;
+
+    float max_speed_kmph;
+
+    double start_lat;
+    double start_lon;
+
+    double end_lat;
+    double end_lon;
+
+    char note[16];
+};
+
+static StoredRunHistoryRecord records[SD_HISTORY_MAX_RECORDS];
+static uint8_t recordCount = 0;
+static bool historyReady = false;
+
+static void copy_text(char *dst, size_t dstSize, const char *src) {
+    if (dstSize == 0) {
+        return;
+    }
+
+    strncpy(dst, src, dstSize - 1);
+    dst[dstSize - 1] = '\0';
 }
 
-static void debugPrint(const char* message) {
-#if SD_HISTORY_DEBUG
-    Serial.print(message);
-#endif
+static void clear_records() {
+    recordCount = 0;
 }
 
-static const char* safeText(const char* text) {
-    if (text == nullptr) {
-        return "";
-    }
+static void stored_to_public(
+    const StoredRunHistoryRecord &stored,
+    RunHistoryRecord &record
+) {
+    record.date = stored.date;
+    record.start_time = stored.start_time;
 
-    return text;
+    record.distance_m = stored.distance_m;
+
+    record.moving_time_s = stored.moving_time_s;
+    record.elapsed_time_s = stored.elapsed_time_s;
+
+    record.pause_count = stored.pause_count;
+
+    record.max_speed_kmph = stored.max_speed_kmph;
+
+    record.start_lat = stored.start_lat;
+    record.start_lon = stored.start_lon;
+
+    record.end_lat = stored.end_lat;
+    record.end_lon = stored.end_lon;
+
+    record.note = stored.note;
 }
 
-static uint32_t getPausedTime(uint32_t movingTimeS, uint32_t elapsedTimeS) {
-    if (elapsedTimeS > movingTimeS) {
-        return elapsedTimeS - movingTimeS;
+static void insert_record_at_front(const StoredRunHistoryRecord &newRecord) {
+    if (recordCount < SD_HISTORY_MAX_RECORDS) {
+        recordCount++;
     }
 
-    return 0;
+    for (int i = recordCount - 1; i > 0; i--) {
+        records[i] = records[i - 1];
+    }
+
+    records[0] = newRecord;
 }
 
-static float getDistanceKm(float distanceM) {
-    if (distanceM <= 0.0f) {
-        return 0.0f;
-    }
+static void add_sample_record(
+    const char *date,
+    const char *start_time,
+    float distance_m,
+    uint32_t moving_time_s,
+    uint32_t elapsed_time_s,
+    uint16_t pause_count,
+    float max_speed_kmph,
+    double start_lat,
+    double start_lon,
+    double end_lat,
+    double end_lon,
+    const char *note
+) {
+    StoredRunHistoryRecord record;
 
-    return distanceM / 1000.0f;
+    copy_text(record.date, sizeof(record.date), date);
+    copy_text(record.start_time, sizeof(record.start_time), start_time);
+
+    record.distance_m = distance_m;
+
+    record.moving_time_s = moving_time_s;
+    record.elapsed_time_s = elapsed_time_s;
+
+    record.pause_count = pause_count;
+
+    record.max_speed_kmph = max_speed_kmph;
+
+    record.start_lat = start_lat;
+    record.start_lon = start_lon;
+
+    record.end_lat = end_lat;
+    record.end_lon = end_lon;
+
+    copy_text(record.note, sizeof(record.note), note);
+
+    if (recordCount < SD_HISTORY_MAX_RECORDS) {
+        records[recordCount] = record;
+        recordCount++;
+    }
 }
 
-static float getAvgPaceSecPerKm(float distanceM, uint32_t movingTimeS) {
-    float distanceKm = getDistanceKm(distanceM);
+static void load_sample_data() {
+    clear_records();
 
-    if (distanceKm <= 0.0f || movingTimeS == 0) {
-        return 0.0f;
-    }
-
-    return movingTimeS / distanceKm;
-}
-
-static float getAvgSpeedKmph(float distanceM, uint32_t movingTimeS) {
-    float distanceKm = getDistanceKm(distanceM);
-
-    if (distanceKm <= 0.0f || movingTimeS == 0) {
-        return 0.0f;
-    }
-
-    float movingTimeHour = movingTimeS / 3600.0f;
-
-    return distanceKm / movingTimeHour;
-}
-
-static bool createHistoryFileIfNeeded() {
-    if (!sdReady) {
-        return false;
-    }
-
-    if (sd.exists(SD_HISTORY_FILE)) {
-        return true;
-    }
-
-    File file = sd.open(SD_HISTORY_FILE, FILE_WRITE);
-
-    if (!file) {
-        debugPrintln("SD: create RUNS.CSV FAILED");
-        return false;
-    }
-
-    file.println(
-        "run_id,"
-        "date,"
-        "start_time,"
-        "distance_m,"
-        "distance_km,"
-        "moving_time_s,"
-        "elapsed_time_s,"
-        "paused_time_s,"
-        "pause_count,"
-        "avg_pace_s_per_km,"
-        "avg_speed_kmph,"
-        "max_speed_kmph,"
-        "start_lat,"
-        "start_lon,"
-        "end_lat,"
-        "end_lon,"
-        "note"
+    // Mẫu mới nhất nằm trên cùng
+    add_sample_record(
+        "2026-07-07",
+        "06:20:12",
+        3210.0f,
+        1263,
+        1450,
+        2,
+        12.8f,
+        21.005812,
+        105.843145,
+        21.010901,
+        105.850212,
+        "SIM"
     );
 
-    file.close();
+    add_sample_record(
+        "2026-07-05",
+        "17:42:30",
+        5050.0f,
+        1890,
+        2015,
+        1,
+        14.2f,
+        21.002100,
+        105.840300,
+        21.015400,
+        105.852800,
+        "GPS"
+    );
 
-    debugPrintln("SD: create RUNS.CSV OK");
+    add_sample_record(
+        "2026-07-02",
+        "05:58:44",
+        2210.0f,
+        870,
+        920,
+        0,
+        10.5f,
+        21.004211,
+        105.842019,
+        21.008700,
+        105.846231,
+        "OUTDOOR"
+    );
+
+    add_sample_record(
+        "2026-06-29",
+        "18:10:05",
+        10120.0f,
+        3720,
+        4050,
+        3,
+        15.1f,
+        21.001112,
+        105.839999,
+        21.020213,
+        105.861111,
+        "GPS"
+    );
+
+    add_sample_record(
+        "2026-06-25",
+        "06:05:19",
+        1520.0f,
+        625,
+        660,
+        0,
+        9.4f,
+        21.003333,
+        105.844444,
+        21.006666,
+        105.847777,
+        "SIM"
+    );
+}
+
+static bool parse_csv_line(char *line, StoredRunHistoryRecord &record) {
+    const uint8_t FIELD_COUNT = 12;
+    char *fields[FIELD_COUNT];
+
+    uint8_t index = 0;
+    char *token = strtok(line, ",");
+
+    while (token != NULL && index < FIELD_COUNT) {
+        fields[index] = token;
+        index++;
+        token = strtok(NULL, ",");
+    }
+
+    if (index < FIELD_COUNT) {
+        return false;
+    }
+
+    copy_text(record.date, sizeof(record.date), fields[0]);
+    copy_text(record.start_time, sizeof(record.start_time), fields[1]);
+
+    record.distance_m = atof(fields[2]);
+
+    record.moving_time_s = strtoul(fields[3], NULL, 10);
+    record.elapsed_time_s = strtoul(fields[4], NULL, 10);
+
+    record.pause_count = (uint16_t)strtoul(fields[5], NULL, 10);
+
+    record.max_speed_kmph = atof(fields[6]);
+
+    record.start_lat = atof(fields[7]);
+    record.start_lon = atof(fields[8]);
+
+    record.end_lat = atof(fields[9]);
+    record.end_lon = atof(fields[10]);
+
+    copy_text(record.note, sizeof(record.note), fields[11]);
+
     return true;
 }
 
-static uint32_t countSavedRuns() {
-    if (!sdReady) {
-        return 0;
-    }
+static void load_records_from_sd() {
+    clear_records();
 
-    File file = sd.open(SD_HISTORY_FILE);
+    File file = SD.open(SD_HISTORY_FILE, FILE_READ);
 
     if (!file) {
-        return 0;
+        return;
     }
 
-    uint32_t lineCount = 0;
+    char line[160];
+    uint8_t pos = 0;
 
     while (file.available()) {
         char c = file.read();
 
+        if (c == '\r') {
+            continue;
+        }
+
         if (c == '\n') {
-            lineCount++;
+            line[pos] = '\0';
+
+            if (pos > 0) {
+                StoredRunHistoryRecord record;
+
+                if (parse_csv_line(line, record)) {
+                    // Dòng mới hơn thường được ghi sau.
+                    // Đưa bản ghi mới lên đầu list.
+                    insert_record_at_front(record);
+                }
+            }
+
+            pos = 0;
+        } else {
+            if (pos < sizeof(line) - 1) {
+                line[pos] = c;
+                pos++;
+            }
+        }
+    }
+
+    if (pos > 0) {
+        line[pos] = '\0';
+
+        StoredRunHistoryRecord record;
+
+        if (parse_csv_line(line, record)) {
+            insert_record_at_front(record);
         }
     }
 
     file.close();
-
-    // line 1 là header, nên số buổi chạy = lineCount - 1
-    if (lineCount == 0) {
-        return 0;
-    }
-
-    return lineCount - 1;
 }
 
 bool sd_history_init() {
-    sdReady = false;
+#if SD_HISTORY_USE_SAMPLE_DATA
+    load_sample_data();
+    historyReady = true;
+    return true;
+#else
+    clear_records();
 
-    SPI.begin();
+    historyReady = SD.begin(SD_CS_PIN);
 
-    if (!sd.begin(SD_CS_PIN, SD_SCK_MHZ(SD_SPI_SPEED_MHZ))) {
-        debugPrintln("SD: init FAILED");
+    if (!historyReady) {
         return false;
     }
 
-    sdReady = true;
-
-    debugPrintln("SD: init OK");
-
-    if (!createHistoryFileIfNeeded()) {
-        return false;
-    }
+    load_records_from_sd();
 
     return true;
+#endif
 }
 
 bool sd_history_isReady() {
-    return sdReady;
+    return historyReady;
+}
+
+uint8_t sd_history_getCount() {
+    return recordCount;
+}
+
+bool sd_history_getRecord(uint8_t index, RunHistoryRecord &record) {
+    if (!historyReady) {
+        return false;
+    }
+
+    if (index >= recordCount) {
+        return false;
+    }
+
+    stored_to_public(records[index], record);
+
+    return true;
 }
 
 bool sd_history_saveRun(const RunHistoryRecord &record) {
-    if (!sdReady) {
-        debugPrintln("SD: not ready");
+#if SD_HISTORY_USE_SAMPLE_DATA
+    StoredRunHistoryRecord stored;
+
+    copy_text(stored.date, sizeof(stored.date), record.date);
+    copy_text(stored.start_time, sizeof(stored.start_time), record.start_time);
+
+    stored.distance_m = record.distance_m;
+
+    stored.moving_time_s = record.moving_time_s;
+    stored.elapsed_time_s = record.elapsed_time_s;
+
+    stored.pause_count = record.pause_count;
+
+    stored.max_speed_kmph = record.max_speed_kmph;
+
+    stored.start_lat = record.start_lat;
+    stored.start_lon = record.start_lon;
+
+    stored.end_lat = record.end_lat;
+    stored.end_lon = record.end_lon;
+
+    copy_text(stored.note, sizeof(stored.note), record.note);
+
+    insert_record_at_front(stored);
+
+    return true;
+#else
+    if (!historyReady) {
         return false;
     }
 
-    if (!createHistoryFileIfNeeded()) {
-        return false;
-    }
-
-    File file = sd.open(SD_HISTORY_FILE, FILE_WRITE);
+    File file = SD.open(SD_HISTORY_FILE, FILE_WRITE);
 
     if (!file) {
-        debugPrintln("SD: open RUNS.CSV FAILED");
         return false;
     }
 
-    uint32_t runId = countSavedRuns() + 1;
-
-    float distanceKm = getDistanceKm(record.distance_m);
-    uint32_t pausedTimeS = getPausedTime(
-        record.moving_time_s,
-        record.elapsed_time_s
-    );
-
-    float avgPaceSecPerKm = getAvgPaceSecPerKm(
-        record.distance_m,
-        record.moving_time_s
-    );
-
-    float avgSpeedKmph = getAvgSpeedKmph(
-        record.distance_m,
-        record.moving_time_s
-    );
-
-    file.print(runId);
+    file.print(record.date);
     file.print(",");
-
-    file.print(safeText(record.date));
+    file.print(record.start_time);
     file.print(",");
-
-    file.print(safeText(record.start_time));
-    file.print(",");
-
     file.print(record.distance_m, 2);
     file.print(",");
-
-    file.print(distanceKm, 3);
-    file.print(",");
-
     file.print(record.moving_time_s);
     file.print(",");
-
     file.print(record.elapsed_time_s);
     file.print(",");
-
-    file.print(pausedTimeS);
-    file.print(",");
-
     file.print(record.pause_count);
     file.print(",");
-
-    file.print(avgPaceSecPerKm, 2);
-    file.print(",");
-
-    file.print(avgSpeedKmph, 2);
-    file.print(",");
-
     file.print(record.max_speed_kmph, 2);
     file.print(",");
-
     file.print(record.start_lat, 6);
     file.print(",");
-
     file.print(record.start_lon, 6);
     file.print(",");
-
     file.print(record.end_lat, 6);
     file.print(",");
-
     file.print(record.end_lon, 6);
     file.print(",");
-
-    file.println(safeText(record.note));
+    file.println(record.note);
 
     file.close();
 
-    debugPrintln("SD: save run OK");
+    sd_history_init();
+
     return true;
+#endif
 }
 
 bool sd_history_writeTest() {
-    if (!sdReady) {
-        debugPrintln("SD: not ready");
+#if SD_HISTORY_USE_SAMPLE_DATA
+    return true;
+#else
+    if (!historyReady) {
         return false;
     }
 
-    File file = sd.open(SD_TEST_FILE, FILE_WRITE);
+    File file = SD.open(SD_TEST_FILE, FILE_WRITE);
 
     if (!file) {
-        debugPrintln("SD: open TEST.TXT for write FAILED");
         return false;
     }
 
-    file.println("HELLO STM32");
+    file.println("STM32 SD TEST OK");
     file.close();
 
-    debugPrintln("SD: write TEST.TXT OK");
     return true;
+#endif
 }
 
 bool sd_history_readTest() {
-    if (!sdReady) {
-        debugPrintln("SD: not ready");
+#if SD_HISTORY_USE_SAMPLE_DATA
+    return true;
+#else
+    if (!historyReady) {
         return false;
     }
 
-    File file = sd.open(SD_TEST_FILE);
+    File file = SD.open(SD_TEST_FILE, FILE_READ);
 
     if (!file) {
-        debugPrintln("SD: open TEST.TXT for read FAILED");
         return false;
     }
-
-#if SD_HISTORY_DEBUG
-    Serial.println("SD: Reading TEST.TXT:");
-
-    while (file.available()) {
-        Serial.write(file.read());
-    }
-
-    Serial.println();
-#endif
 
     file.close();
 
-    debugPrintln("SD: read TEST.TXT OK");
     return true;
+#endif
 }
 
 bool sd_history_printAll(Stream &out) {
-    if (!sdReady) {
+    if (!historyReady) {
+        out.println("SD history not ready");
         return false;
     }
 
-    File file = sd.open(SD_HISTORY_FILE);
+    for (uint8_t i = 0; i < recordCount; i++) {
+        out.print(i);
+        out.print(": ");
 
-    if (!file) {
-        return false;
+        out.print(records[i].date);
+        out.print(" ");
+        out.print(records[i].start_time);
+        out.print(" ");
+
+        out.print(records[i].distance_m / 1000.0f, 2);
+        out.print(" km ");
+
+        out.print(records[i].moving_time_s);
+        out.print(" s ");
+
+        out.print(records[i].note);
+        out.println();
     }
-
-    while (file.available()) {
-        out.write(file.read());
-    }
-
-    file.close();
 
     return true;
 }
 
 bool sd_history_clear() {
-    if (!sdReady) {
+#if SD_HISTORY_USE_SAMPLE_DATA
+    clear_records();
+    return true;
+#else
+    if (!historyReady) {
         return false;
     }
 
-    if (sd.exists(SD_HISTORY_FILE)) {
-        sd.remove(SD_HISTORY_FILE);
-    }
+    SD.remove(SD_HISTORY_FILE);
+    clear_records();
 
-    return createHistoryFileIfNeeded();
+    return true;
+#endif
 }

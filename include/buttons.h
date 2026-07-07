@@ -6,6 +6,7 @@ void buttons_update();
 
 bool button_b1_pressed();
 bool button_b2_pressed();
+bool button_b1_long_pressed();
 bool button_b2_long_pressed();
 
 #endif

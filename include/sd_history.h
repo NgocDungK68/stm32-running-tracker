@@ -3,6 +3,10 @@
 
 #include <Arduino.h>
 
+#ifndef SD_HISTORY_MAX_RECORDS
+#define SD_HISTORY_MAX_RECORDS 10
+#endif
+
 struct RunHistoryRecord {
     const char* date;          // "YYYY-MM-DD"
     const char* start_time;    // "HH:MM:SS"
@@ -16,17 +20,20 @@ struct RunHistoryRecord {
 
     float max_speed_kmph;      // Tốc độ lớn nhất, km/h
 
-    double start_lat;          // Vĩ độ điểm bắt đầu
-    double start_lon;          // Kinh độ điểm bắt đầu
+    double start_lat;
+    double start_lon;
 
-    double end_lat;            // Vĩ độ điểm kết thúc
-    double end_lon;            // Kinh độ điểm kết thúc
+    double end_lat;
+    double end_lon;
 
-    const char* note;          // Ghi chú ngắn: "GPS", "SIM", "OUTDOOR"...
+    const char* note;          // "GPS", "SIM", "OUTDOOR"...
 };
 
 bool sd_history_init();
 bool sd_history_isReady();
+
+uint8_t sd_history_getCount();
+bool sd_history_getRecord(uint8_t index, RunHistoryRecord &record);
 
 bool sd_history_saveRun(const RunHistoryRecord &record);
 
