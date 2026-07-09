@@ -11,14 +11,14 @@ struct RunHistoryRecord {
     const char* date;          // "YYYY-MM-DD"
     const char* start_time;    // "HH:MM:SS"
 
-    float distance_m;          // Tổng quãng đường, đơn vị mét
+    float distance_m;
 
-    uint32_t moving_time_s;    // Thời gian chạy thực, không tính pause
-    uint32_t elapsed_time_s;   // Tổng thời gian từ Start đến Stop, có tính pause
+    uint32_t moving_time_s;
+    uint32_t elapsed_time_s;
 
-    uint16_t pause_count;      // Số lần pause/auto-pause
+    uint16_t pause_count;
 
-    float max_speed_kmph;      // Tốc độ lớn nhất, km/h
+    float max_speed_kmph;
 
     double start_lat;
     double start_lon;
@@ -26,7 +26,7 @@ struct RunHistoryRecord {
     double end_lat;
     double end_lon;
 
-    const char* note;          // "GPS", "SIM", "OUTDOOR"...
+    const char* note;
 };
 
 bool sd_history_init();
@@ -36,6 +36,7 @@ uint8_t sd_history_getCount();
 bool sd_history_getRecord(uint8_t index, RunHistoryRecord &record);
 
 bool sd_history_saveRun(const RunHistoryRecord &record);
+bool sd_history_deleteRecord(uint8_t index);
 
 bool sd_history_writeTest();
 bool sd_history_readTest();

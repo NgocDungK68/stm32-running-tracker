@@ -34,6 +34,30 @@ static const char* gps_status_to_text(GpsStatus status) {
     }
 }
 
+static const char* run_status_to_text(const DisplayData &data) {
+    if (data.user_paused) {
+        return "PAUSED";
+    }
+
+    if (data.auto_paused) {
+        return "AUTO PAUSED";
+    }
+
+    if (data.gps_status == GPS_NO_DATA) {
+        return "NO DATA";
+    }
+
+    if (data.gps_status == GPS_NO_FIX) {
+        return "NO FIX";
+    }
+
+    if (data.gps_status == GPS_OK || data.gps_status == GPS_SIM) {
+        return "OK";
+    }
+
+    return "UNKNOWN";
+}
+
 static void draw_menu_item(int y, const char* text, bool selected) {
     if (selected) {
         display.fillRect(0, y - 1, 128, 12, SSD1306_WHITE);
@@ -128,9 +152,6 @@ static void print_pace(float pace) {
 }
 
 static void make_short_date(const char *date, char *out, size_t outSize) {
-    // Input:  "YYYY-MM-DD"
-    // Output: "DD/MM/YY"
-
     if (outSize < 9) {
         return;
     }
@@ -216,26 +237,84 @@ void display_show_run_data(const DisplayData &data) {
     display.setTextColor(SSD1306_WHITE);
 
     display.setCursor(0, 0);
-    display.print("RUNNING");
+    display.print("RUN SESSION");
 
-    display.setCursor(0, 12);
+    display.setCursor(82, 0);
+    display.print("GPS:");
+    display.print(gps_status_to_text(data.gps_status));
+
+    display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+
+    display.setCursor(0, 14);
     display.print("Dist: ");
     display.print(data.distance / 1000.0f, 2);
     display.println(" km");
 
-    display.setCursor(0, 24);
+    display.setCursor(0, 28);
     display.print("Time: ");
     print_time_mmss(data.seconds);
     display.println();
 
-    display.setCursor(0, 36);
+    display.setCursor(0, 42);
     display.print("Pace: ");
     print_pace(data.pace);
     display.println();
 
-    display.setCursor(0, 48);
-    display.print("GPS: ");
-    display.println(gps_status_to_text(data.gps_status));
+    display.setCursor(0, 56);
+    display.print("Status: ");
+    display.print(run_status_to_text(data));
+
+    display.display();
+}
+
+void display_show_run_stop_confirm(const DisplayData &data) {
+    display.clearDisplay();
+
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+
+    display.setCursor(31, 0);
+    display.println("STOP RUN?");
+
+    display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+
+    display.setCursor(0, 16);
+    display.print("Dist: ");
+    display.print(data.distance / 1000.0f, 2);
+    display.println(" km");
+
+    display.setCursor(0, 28);
+    display.print("Time: ");
+    print_time_mmss(data.seconds);
+
+    display.setCursor(0, 42);
+    display.println("Hold B1: Save+Stop");
+
+    display.setCursor(0, 54);
+    display.println("Hold B2: Continue");
+
+    display.display();
+}
+
+void display_show_save_result(bool ok) {
+    display.clearDisplay();
+
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+
+    if (ok) {
+        display.setCursor(34, 18);
+        display.println("RUN SAVED");
+
+        display.setCursor(18, 36);
+        display.println("Saved to MicroSD");
+    } else {
+        display.setCursor(28, 18);
+        display.println("SAVE FAILED");
+
+        display.setCursor(8, 36);
+        display.println("Check MicroSD card");
+    }
 
     display.display();
 }
@@ -304,13 +383,9 @@ static void draw_history_row(
 
     float distanceKm = record.distance_m / 1000.0f;
 
-    // Bên trái: ngày chạy
     display.setCursor(2, y);
     display.print(dateShort);
 
-    // Bên phải: số km chạy
-    // OLED 128px, font size 1 khoảng 6px/ký tự.
-    // x = 82 đủ cho dạng "10.12km".
     display.setCursor(82, y);
     display.print(distanceKm, 2);
     display.print("km");
@@ -330,11 +405,9 @@ void display_show_history_list(
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
 
-    // Tiêu đề bên trái
     display.setCursor(0, 0);
     display.println("RUN HISTORY");
 
-    // Chỉ số bên phải là bản ghi đang chọn / tổng số bản ghi
     uint8_t selectedGlobalIndex = topIndex + selectedVisibleIndex;
 
     display.setCursor(104, 0);
@@ -461,6 +534,58 @@ void display_show_history_detail(
             int y = 14 + i * 12;
             draw_detail_line(lineIndex, y, record);
         }
+    }
+
+    display.display();
+}
+
+void display_show_history_delete_confirm(const RunHistoryRecord &record) {
+    display.clearDisplay();
+
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+
+    display.setCursor(25, 0);
+    display.println("DELETE RUN?");
+
+    display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
+
+    char dateShort[9];
+    make_short_date(record.date, dateShort, sizeof(dateShort));
+
+    display.setCursor(0, 16);
+    display.print("Date: ");
+    display.println(dateShort);
+
+    display.setCursor(0, 28);
+    display.print("Dist: ");
+    display.print(record.distance_m / 1000.0f, 2);
+    display.println(" km");
+
+    display.setCursor(0, 44);
+    display.println("Hold B1: Delete");
+
+    display.setCursor(0, 56);
+    display.println("Hold B2: Back");
+
+    display.display();
+}
+
+void display_show_delete_result(bool ok) {
+    display.clearDisplay();
+
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+
+    if (ok) {
+        display.setCursor(34, 22);
+        display.println("DELETED");
+    } else {
+        display.setCursor(22, 22);
+        display.println("DELETE FAILED");
+
+        display.setCursor(12, 40);
+        display.println("Check MicroSD");
     }
 
     display.display();

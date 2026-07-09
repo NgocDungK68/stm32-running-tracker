@@ -3,14 +3,27 @@
 
 #include "gps.h"
 #include "simulator.h"
+#include "sd_history.h"
 
-// Khởi tạo lại một buổi chạy thật bằng GPS
 void run_tracker_init();
 
-// Cập nhật dữ liệu chạy thật từ GPSData
 RunData run_tracker_update(const GPSData &gpsData);
-
-// Lấy dữ liệu chạy hiện tại
 RunData run_tracker_getData();
+
+void run_tracker_pause(bool countPause = true);
+void run_tracker_resume();
+
+bool run_tracker_isPaused();
+bool run_tracker_isUserPaused();
+bool run_tracker_isAutoPaused();
+
+bool run_tracker_finish(
+    RunHistoryRecord &record,
+    const char *date,
+    const char *startTime,
+    const char *note
+);
+
+void run_tracker_discard();
 
 #endif

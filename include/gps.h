@@ -4,12 +4,20 @@
 #include "app_types.h"
 
 struct GPSData {
-    bool valid;          // true nếu GPS đã fix vị trí
-    bool hasSignal;      // true nếu STM32 nhận được dữ liệu UART từ GPS
+    bool valid;
+    bool hasSignal;
 
     double lat;
     double lon;
     float speed_kmph;
+
+    bool hasDateTime;
+    int year;
+    int month;
+    int day;
+    int hour;
+    int minute;
+    int second;
 
     GpsStatus status;
 };

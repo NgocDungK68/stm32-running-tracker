@@ -1,84 +1,116 @@
 #include "buzzer.h"
+#include "config.h"
+
 #include <Arduino.h>
 
-static int buzzerPin = -1;
+static int buzzerOutputPin = -1;
 
-static bool active = false;
-static bool buzzerOn = false;
+static bool buzzerActive = false;
+static bool buzzerOutputHigh = false;
 
-static int targetBeeps = 0;
-static int doneBeeps = 0;
+static uint8_t targetBeepCount = 0;
+static uint8_t completedBeepCount = 0;
 
-static unsigned long beepOnTime = 200;
-static unsigned long beepOffTime = 200;
-static unsigned long lastChangeTime = 0;
+static unsigned long beepOnDurationMs = BUZZER_BEEP_ON_MS;
+static unsigned long beepOffDurationMs = BUZZER_BEEP_OFF_MS;
+static unsigned long lastBuzzerChangeTime = 0;
 
 void buzzer_init(int pin) {
-    buzzerPin = pin;
+    buzzerOutputPin = pin;
 
-    pinMode(buzzerPin, OUTPUT);
-    digitalWrite(buzzerPin, LOW);
+    pinMode(buzzerOutputPin, OUTPUT);
+    digitalWrite(buzzerOutputPin, LOW);
 
-    active = false;
-    buzzerOn = false;
-    targetBeeps = 0;
-    doneBeeps = 0;
+    buzzerActive = false;
+    buzzerOutputHigh = false;
+
+    targetBeepCount = 0;
+    completedBeepCount = 0;
+
+    lastBuzzerChangeTime = 0;
 }
 
-void buzzer_start(int times, unsigned long onMs, unsigned long offMs) {
-    if (buzzerPin < 0) return;
-    if (times <= 0) return;
+void buzzer_start(
+    uint8_t beepCount,
+    unsigned long onMs,
+    unsigned long offMs
+) {
+    if (buzzerOutputPin < 0) {
+        return;
+    }
 
-    targetBeeps = times;
-    doneBeeps = 0;
+    if (beepCount == 0) {
+        return;
+    }
 
-    beepOnTime = onMs;
-    beepOffTime = offMs;
+    targetBeepCount = beepCount;
+    completedBeepCount = 0;
 
-    active = true;
-    buzzerOn = true;
+    beepOnDurationMs = onMs;
+    beepOffDurationMs = offMs;
 
-    digitalWrite(buzzerPin, HIGH);
-    lastChangeTime = millis();
+    buzzerActive = true;
+    buzzerOutputHigh = true;
+
+    digitalWrite(buzzerOutputPin, HIGH);
+    lastBuzzerChangeTime = millis();
+}
+
+void buzzer_beep_once() {
+    buzzer_start(
+        1,
+        BUZZER_BEEP_ON_MS,
+        BUZZER_BEEP_OFF_MS
+    );
+}
+
+void buzzer_beep_kilometer() {
+    buzzer_start(
+        BUZZER_BEEP_TIMES,
+        BUZZER_BEEP_ON_MS,
+        BUZZER_BEEP_OFF_MS
+    );
 }
 
 void buzzer_update() {
-    if (!active) return;
+    if (!buzzerActive) {
+        return;
+    }
 
     unsigned long now = millis();
 
-    if (buzzerOn) {
-        if (now - lastChangeTime >= beepOnTime) {
-            buzzerOn = false;
-            digitalWrite(buzzerPin, LOW);
+    if (buzzerOutputHigh) {
+        if (now - lastBuzzerChangeTime >= beepOnDurationMs) {
+            buzzerOutputHigh = false;
+            digitalWrite(buzzerOutputPin, LOW);
 
-            doneBeeps++;
-            lastChangeTime = now;
+            completedBeepCount++;
+            lastBuzzerChangeTime = now;
 
-            if (doneBeeps >= targetBeeps) {
-                active = false;
-                digitalWrite(buzzerPin, LOW);
+            if (completedBeepCount >= targetBeepCount) {
+                buzzerActive = false;
+                digitalWrite(buzzerOutputPin, LOW);
             }
         }
     } else {
-        if (now - lastChangeTime >= beepOffTime) {
-            buzzerOn = true;
-            digitalWrite(buzzerPin, HIGH);
+        if (now - lastBuzzerChangeTime >= beepOffDurationMs) {
+            buzzerOutputHigh = true;
+            digitalWrite(buzzerOutputPin, HIGH);
 
-            lastChangeTime = now;
+            lastBuzzerChangeTime = now;
         }
     }
 }
 
 void buzzer_stop() {
-    active = false;
-    buzzerOn = false;
+    buzzerActive = false;
+    buzzerOutputHigh = false;
 
-    if (buzzerPin >= 0) {
-        digitalWrite(buzzerPin, LOW);
+    if (buzzerOutputPin >= 0) {
+        digitalWrite(buzzerOutputPin, LOW);
     }
 }
 
 bool buzzer_isBusy() {
-    return active;
+    return buzzerActive;
 }
