@@ -8,7 +8,7 @@
 // =======================
 // 1 = dùng simulator
 // 0 = dùng GPS thật
-#define USE_SIMULATOR 1
+#define USE_SIMULATOR 0
 
 // =======================
 // Debug
@@ -98,14 +98,49 @@
 #define GPS_TIMEZONE_OFFSET_HOURS 7
 
 // =======================
-// Run tracker algorithm
+// Run tracker distance filter
 // =======================
-#define RUN_TRACKER_MIN_STEP_M 1.5f
-#define RUN_TRACKER_MAX_SPEED_MPS 12.0f
 
-#define RUN_TRACKER_AUTO_PAUSE_SPEED_KMPH 1.0f
-#define RUN_TRACKER_AUTO_RESUME_SPEED_KMPH 2.0f
-#define RUN_TRACKER_AUTO_RESUME_DISTANCE_M 5.0f
-#define RUN_TRACKER_AUTO_PAUSE_DELAY_MS 5000UL
+// Bỏ qua các bước GPS quá nhỏ, vì thường là nhiễu khi đứng yên
+#define RUN_TRACKER_MIN_STEP_M 1.5f
+
+// Tốc độ tối đa hợp lý cho chạy bộ, dùng để lọc GPS jump
+// 8 m/s = 28.8 km/h, đủ rộng cho chạy nhanh nhưng loại được nhảy tọa độ lớn
+#define RUN_TRACKER_MAX_VALID_SPEED_MPS 8.0f
+
+// Cho phép dư thêm vài mét vì GPS ngoài trời có sai số
+#define RUN_TRACKER_GPS_JUMP_MARGIN_M 8.0f
+
+// Nếu tốc độ tính từ 2 điểm GPS vượt mức này thì không dùng để cập nhật max speed
+#define RUN_TRACKER_MAX_SPEED_RECORD_KMPH 40.0f
+
+
+// =======================
+// Current pace
+// =======================
+
+// GPS khoảng 1Hz, dùng 8 mẫu gần nhất tương ứng khoảng 8 giây
+#define RUN_TRACKER_CURRENT_PACE_SAMPLE_COUNT 8
+
+// Cần ít nhất 5 mẫu mới hiện pace hiện tại, tránh pace nhảy lúc mới bắt đầu
+#define RUN_TRACKER_CURRENT_PACE_MIN_SAMPLES 5
+
+// Nếu trong cửa sổ pace đi được quá ít thì chưa hiện pace
+#define RUN_TRACKER_CURRENT_PACE_MIN_DISTANCE_M 6.0f
+
+
+// =======================
+// Auto pause / auto continue
+// =======================
+
+// Cửa sổ xét đứng yên / di chuyển lại
+#define RUN_TRACKER_AUTO_PAUSE_WINDOW_MS 5000UL
+#define RUN_TRACKER_AUTO_RESUME_WINDOW_MS 5000UL
+
+// Nếu 5 giây gần nhất đi được ít hơn 2.5m thì coi là đứng yên
+#define RUN_TRACKER_AUTO_PAUSE_DISTANCE_M 2.5f
+
+// Nếu sau auto pause, 5 giây gần nhất đi được từ 4m trở lên thì tự continue
+#define RUN_TRACKER_AUTO_RESUME_DISTANCE_M 4.0f
 
 #endif

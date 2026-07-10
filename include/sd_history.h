@@ -8,8 +8,8 @@
 #endif
 
 struct RunHistoryRecord {
-    const char* date;          // "YYYY-MM-DD"
-    const char* start_time;    // "HH:MM:SS"
+    const char *date;
+    const char *start_time;
 
     float distance_m;
 
@@ -20,13 +20,7 @@ struct RunHistoryRecord {
 
     float max_speed_kmph;
 
-    double start_lat;
-    double start_lon;
-
-    double end_lat;
-    double end_lon;
-
-    const char* note;
+    const char *note;
 };
 
 bool sd_history_init();
@@ -37,11 +31,5 @@ bool sd_history_getRecord(uint8_t index, RunHistoryRecord &record);
 
 bool sd_history_saveRun(const RunHistoryRecord &record);
 bool sd_history_deleteRecord(uint8_t index);
-
-bool sd_history_writeTest();
-bool sd_history_readTest();
-
-bool sd_history_printAll(Stream &out);
-bool sd_history_clear();
 
 #endif

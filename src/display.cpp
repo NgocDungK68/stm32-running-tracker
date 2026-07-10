@@ -14,15 +14,10 @@ static Adafruit_SSD1306 display(
 );
 
 static const uint8_t HISTORY_VISIBLE_ROWS = 4;
+static const uint8_t HISTORY_DETAIL_LINE_COUNT = 9;
 
-static const char* gps_status_to_text(GpsStatus status) {
+static const char* gps_header_to_text(GpsStatus status) {
     switch (status) {
-        case GPS_NO_DATA:
-            return "NO DATA";
-
-        case GPS_NO_FIX:
-            return "NO FIX";
-
         case GPS_OK:
             return "OK";
 
@@ -30,18 +25,18 @@ static const char* gps_status_to_text(GpsStatus status) {
             return "SIM";
 
         default:
-            return "UNKNOWN";
+            return "X";
     }
 }
 
 static const char* run_status_to_text(const DisplayData &data) {
-    if (data.user_paused) {
-        return "PAUSED";
-    }
+    /*
+        Status ưu tiên lỗi GPS trước.
 
-    if (data.auto_paused) {
-        return "AUTO PAUSED";
-    }
+        Nếu GPS không OK:
+        - Dòng GPS trên cùng chỉ hiện GPS:X
+        - Dòng Status cuối màn hình hiện lỗi cụ thể
+    */
 
     if (data.gps_status == GPS_NO_DATA) {
         return "NO DATA";
@@ -51,11 +46,19 @@ static const char* run_status_to_text(const DisplayData &data) {
         return "NO FIX";
     }
 
-    if (data.gps_status == GPS_OK || data.gps_status == GPS_SIM) {
-        return "OK";
+    if (data.gps_status != GPS_OK && data.gps_status != GPS_SIM) {
+        return "GPS ERR";
     }
 
-    return "UNKNOWN";
+    if (data.user_paused) {
+        return "PAUSED";
+    }
+
+    if (data.auto_paused) {
+        return "AUTO PAUSED";
+    }
+
+    return "OK";
 }
 
 static void draw_menu_item(int y, const char* text, bool selected) {
@@ -237,11 +240,11 @@ void display_show_run_data(const DisplayData &data) {
     display.setTextColor(SSD1306_WHITE);
 
     display.setCursor(0, 0);
-    display.print("RUN SESSION");
+    display.print("RUN");
 
-    display.setCursor(82, 0);
+    display.setCursor(86, 0);
     display.print("GPS:");
-    display.print(gps_status_to_text(data.gps_status));
+    display.print(gps_header_to_text(data.gps_status));
 
     display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
 
@@ -303,17 +306,14 @@ void display_show_save_result(bool ok) {
     display.setTextColor(SSD1306_WHITE);
 
     if (ok) {
-        display.setCursor(34, 18);
+        display.setCursor(34, 26);
         display.println("RUN SAVED");
-
-        display.setCursor(18, 36);
-        display.println("Saved to MicroSD");
     } else {
         display.setCursor(28, 18);
         display.println("SAVE FAILED");
 
-        display.setCursor(8, 36);
-        display.println("Check MicroSD card");
+        display.setCursor(38, 36);
+        display.println("Check SD");
     }
 
     display.display();
@@ -334,14 +334,11 @@ void display_show_history_unavailable() {
 
     display.drawLine(0, 10, 127, 10, SSD1306_WHITE);
 
-    display.setCursor(0, 18);
-    display.println("MicroSD not ready");
+    display.setCursor(0, 22);
+    display.println("SD not ready");
 
-    display.setCursor(0, 32);
-    display.println("Check CS/SPI/power");
-
-    display.setCursor(0, 46);
-    display.println("or enable sample");
+    display.setCursor(0, 38);
+    display.println("Check SD card");
 
     display.display();
 }
@@ -484,26 +481,6 @@ static void draw_detail_line(
             break;
 
         case 8:
-            display.print("SLat: ");
-            display.print(record.start_lat, 5);
-            break;
-
-        case 9:
-            display.print("SLon: ");
-            display.print(record.start_lon, 5);
-            break;
-
-        case 10:
-            display.print("ELat: ");
-            display.print(record.end_lat, 5);
-            break;
-
-        case 11:
-            display.print("ELon: ");
-            display.print(record.end_lon, 5);
-            break;
-
-        case 12:
             display.print("Note: ");
             display.print(record.note);
             break;
@@ -530,7 +507,7 @@ void display_show_history_detail(
     for (uint8_t i = 0; i < 4; i++) {
         uint8_t lineIndex = topLine + i;
 
-        if (lineIndex <= 12) {
+        if (lineIndex < HISTORY_DETAIL_LINE_COUNT) {
             int y = 14 + i * 12;
             draw_detail_line(lineIndex, y, record);
         }
@@ -584,8 +561,8 @@ void display_show_delete_result(bool ok) {
         display.setCursor(22, 22);
         display.println("DELETE FAILED");
 
-        display.setCursor(12, 40);
-        display.println("Check MicroSD");
+        display.setCursor(38, 40);
+        display.println("Check SD");
     }
 
     display.display();

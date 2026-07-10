@@ -46,7 +46,7 @@ static float nextDistanceAlertM = BUZZER_DISTANCE_STEP_M;
 
 static const uint8_t HISTORY_VISIBLE_COUNT = 4;
 static const uint8_t HISTORY_DETAIL_VISIBLE_LINES = 4;
-static const uint8_t HISTORY_DETAIL_LINE_COUNT = 13;
+static const uint8_t HISTORY_DETAIL_LINE_COUNT = 9;
 
 static bool historyReady = false;
 static uint8_t historyCount = 0;
@@ -323,13 +323,7 @@ static bool make_simulator_history_record(RunHistoryRecord &record) {
 
     record.max_speed_kmph = 0.0f;
 
-    record.start_lat = 0.0;
-    record.start_lon = 0.0;
-
-    record.end_lat = 0.0;
-    record.end_lon = 0.0;
-
-    record.note = "SIM";
+    record.note = "NOTE";
 
     return true;
 }
